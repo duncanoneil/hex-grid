@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hex Grid</title>
+    <style>
+        .main {
+            display:flex;
+            justify-content: center;
+            --s: 50px;  /* size  */
+            --m: 2px;    /* margin */
+            --f: calc(var(--s) * 1.732 + 4 * var(--m) - 1px);
+        }
+
+        .container {
+            font-size: 0; /* disable white space between inline block element */
+
+        }
+
+        .container div {
+            opacity: 1;
+            width: var(--s);
+            margin: var(--m);
+            height: calc(var(--s) * 1.1547);
+            display: inline-block;
+            font-size:initial;
+            clip-path: polygon(0% 25%, 0% 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0%);
+            margin-bottom: calc(var(--m) - var(--s) * 0.2885);
+            background: lightgoldenrodyellow;
+            transition: opacity 0.2s ease-in-out;
+            position: relative;
+            font-size: 12px;
+            text-align: center;
+            line-height: calc(var(--s) * 1.1547);
+        }
+        .container div.ocean { background:darkblue; }
+        .container div.sea { background:dodgerblue; }
+        .container div.grass { background:yellowgreen; }
+        .container div.mountain { background:grey; }
+        .container div.desert { background: tan; }
+        .container div.hills { background:darkgreen; }
+        .container div.tundra { background: #acc2ac; }
+        .container div.snow { background:ghostwhite; }
+        .container div.forest { background:forestgreen; }
+        /*.container div.environmentSet { background:orange!important; }*/
+        .container div.explored::before {
+            content: "✓";
+            position: absolute;
+            bottom: 5px;
+            left: 50%;
+            width: 15px;
+            height: 15px;
+            text-align: center;
+            margin-left: -9px;
+            background: green;
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            line-height: initial;
+            border: 1px solid white;
+        }
+
+        .container::before {
+            content: "";
+            width: calc(var(--s) / 2 + var(--m));
+            float: left;
+            height: 120%;
+            shape-outside: repeating-linear-gradient(#0000 0 calc(var(--f) - 3px), #000 0 var(--f));
+        }
+    </style>
+</head>
+<body>
+<div class="main">
+    <div class="container">
+        <div class=""></div>
+    </div>
+</div>
+<!--
+<div class="controls">
+    <div class="button" id="addDivFront">Add to front</div>
+    <div class="button" id="addDivBack">Add to back</div>
+</div>
+-->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+<script>
+    $( document ).ready(function() {
+        let cellWidth = $( ".container > div" ).outerWidth(true);
+        let cellsToMake = (Math.floor($(window).width() / cellWidth) * Math.floor($(window).height() / cellWidth));
+        let cellsPerRow = calculateCellsPerRow();
+        let rowsToMake = Math.floor(cellsToMake / cellsPerRow);
+        cellsToMake = cellsPerRow * rowsToMake - 1;
+        //console.log('checkCellsPerRow', cellsPerRow);
+
+        for (let step = 0; step < cellsToMake; step++) {
+            $('.container').append('<div class=""></div>');
+        }
+        //let containerWidth = $( ".container" ).width();
+        //let cellsPerRow = Math.floor(containerWidth / cellWidth);
+        let cellRowCountOdd = (cellsPerRow % 2 !== 0);
+        //console.log('cellsPerRow', cellsPerRow);
+        let cellClasses = ["ocean", "sea", "grass", "mountain", "desert", "hills", "forest"/*, "tundra"/*, "snow"*/];
+        let cellData = {};
+        let environmentRelations = {
+            "ocean": ["ocean", "ocean", "sea", "sea", "sea"],
+            "sea": ["ocean", "sea", "sea", "sea", "grass", "hills", "forest"],
+            "grass": ["grass", "grass", "hills", "forest", "sea"],
+            "mountain": ["hills", "mountain", "forest", "sea", "desert"],
+            "desert": ["desert", "desert", "mountain"],
+            "hills": ["grass", "hills", "hills", "hills", "forest", "mountain", "mountain"],
+            "tundra": ["tundra", "tundra", "hills"],
+            "forest": ["grass", "hills", "forest", "forest", "forest", "sea"]
+        }
+        //console.log($(window).width(), $(window).height());
+        $cells = $('.container').children();
+        setEnvironment($cells.eq(getRandomInt($cells.length)), '');
+        $cells.each(function (i) {
+            $this = $(this);
+            let row = Math.floor(i / cellsPerRow);
+            let pos = i - (row*cellsPerRow) + (row % 2 !== 0 ? 0.5 : 0);
+            //console.log('index', i, 'row', row, 'pos', pos);
+            //$(this).text(row + ', ' + pos);
+            $(this).attr('data-row', row);
+            $(this).attr('data-pos', pos);
+            if ($(this).data('environment')) {
+                cellData[row + 'x' + pos] = $(this).data('environment')
+            }
+        });
+
+        //console.log(cellData);
+
+        $( "#addDivFront" ).on( "click", function() {
+            $('.container').prepend('<div class=""></div>');
+        } );
+        $( "#addDivBack" ).on( "click", function() {
+            $('.container').append('<div class=""></div>');
+        } );
+        $( ".container" ).on( "click", 'div.environmentSet', function() {
+            flashCell($(this));
+            $(this).addClass('explored');
+            let row = $(this).data('row');
+            let pos = $(this).data('pos');
+            cellData[row + 'x' + pos + '-explored'] = true;
+            let environment = $(this).data('environment');
+            console.log(row, pos, environment);
+            let $wCell = $(".container div[data-row='"+row+"'][data-pos='"+(pos-1)+"']");
+            setTimeout(setEnvironment, 200, $wCell, environment);
+            let $eCell = $(".container div[data-row='"+row+"'][data-pos='"+(pos+1)+"']");
+            setTimeout(setEnvironment, 200, $eCell, environment);
+            let $nwCell = $(".container div[data-row='"+(row-1)+"'][data-pos='"+(pos-0.5)+"']");
+            setTimeout(setEnvironment, 200, $nwCell, environment);
+            let $neCell = $(".container div[data-row='"+(row-1)+"'][data-pos='"+(pos+0.5)+"']");
+            setTimeout(setEnvironment, 200, $neCell, environment);
+            let $swCell = $(".container div[data-row='"+(row+1)+"'][data-pos='"+(pos-0.5)+"']");
+            setTimeout(setEnvironment, 200, $swCell, environment);
+            let $seCell = $(".container div[data-row='"+(row+1)+"'][data-pos='"+(pos+0.5)+"']");
+            setTimeout(setEnvironment, 200, $seCell, environment);
+        });
+
+        // $( ".container" ).on( "click", 'div.environmentSet', function() {
+        //     flashCell($(this));
+        //     $(this).addClass('explored');
+        //     let cellIndex = $(this).index();
+        //     let cellRowPosition = cellIndex % cellsPerRow;
+        //     let cellRow = Math.floor(cellIndex / cellsPerRow) + 1;
+        //     let cellOnOddRow = (cellRow % 2 !== 0);
+        //     let offset = (cellOnOddRow ? -1 : 0);
+        //     console.log(cellIndex, cellRowPosition, cellRow, cellOnOddRow, cellsPerRow);
+        //
+        //     let wIndex = cellIndex - 1;
+        //     let eIndex = cellIndex + 1;
+        //     let nwIndex = cellIndex - cellsPerRow + offset + (cellOnOddRow && cellRowCountOdd ? 1 : 0);
+        //     let neIndex = cellIndex - cellsPerRow + 1 + offset + (cellOnOddRow && cellRowCountOdd ? 1 : 0);
+        //     let swIndex = cellIndex + cellsPerRow + offset + (!cellOnOddRow && cellRowCountOdd ? -1 : 0);
+        //     let seIndex = cellIndex + cellsPerRow + 1 + offset + (!cellOnOddRow && cellRowCountOdd ? -1 : 0);
+        //     //console.log(nwIndex, neIndex, eIndex, seIndex, swIndex, wIndex);
+        //
+        //     console.log($(this).data('environment'));
+        //     if (!(cellRowPosition === 0 && cellOnOddRow)) {
+        //         if (nwIndex >= 0) setTimeout(setEnvironment, 200, $(this).parent().children().eq(nwIndex), $(this).data('environment'));
+        //         if (swIndex >= 0) setTimeout(setEnvironment, 200, $(this).parent().children().eq(swIndex), $(this).data('environment'));
+        //         if (wIndex >= 0 && cellRowPosition > 0) setTimeout(setEnvironment, 200, $(this).parent().children().eq(wIndex), $(this).data('environment'));
+        //     }
+        //     if (!(cellRowPosition === (cellsPerRow - 1) && !cellOnOddRow)) {
+        //         if (neIndex >= 0) setTimeout(setEnvironment, 200, $(this).parent().children().eq(neIndex), $(this).data('environment'));
+        //         if (eIndex >= 0 && cellRowPosition < (cellsPerRow - 1)) setTimeout(setEnvironment, 200, $(this).parent().children().eq(eIndex), $(this).data('environment'));
+        //         if (seIndex >= 0) setTimeout(setEnvironment, 200, $(this).parent().children().eq(seIndex), $(this).data('environment'));
+        //     }
+        // } );
+
+        $(window).resize( function() {
+            console.log('resize');
+            let cellsPerRow = calculateCellsPerRow();
+            $cells.each(function (i) {
+                $(this).removeData(['environment', 'row', 'pos']);
+                let row = Math.floor(i / cellsPerRow);
+                let pos = i - (row*cellsPerRow) + (row % 2 !== 0 ? 0.5 : 0);
+                //$(this).text(row + ', ' + pos);
+                $(this).attr('data-row', row);
+                $(this).attr('data-pos', pos);
+                $(this).removeClass(['environmentSet', 'explored', "ocean", "sea", "grass", "mountain", "desert", "hills", "forest"]);
+                if (cellData[row + 'x' + pos]) {
+                    $(this).addClass(cellData[row + 'x' + pos]);
+                    $(this).addClass('environmentSet');
+                    $(this).data('environment', cellData[row + 'x' + pos]);
+                }
+                if (cellData[row + 'x' + pos + '-explored']) {
+                    $(this).addClass('explored');
+                }
+            });
+        });
+
+        function setEnvironment($cell, parentEnvironment) {
+            if (!$cell.hasClass('environmentSet')) {
+                $cell.addClass('environmentSet');
+                let environment = '';
+                if (parentEnvironment === '') {
+                    environment = getRandomEnvironment();
+                } else {
+                    environment = getEnvironmentFromParent(parentEnvironment);
+                }
+                $cell.addClass(environment);
+                $cell.data('environment', environment);
+                cellData[$cell.data('row') + 'x' + $cell.data('pos')] = $cell.data('environment')
+                flashCell($cell);
+            }
+        }
+
+        function calculateCellsPerRow() {
+            let cellsPerRow = Math.floor($('.main').width() / cellWidth) - 2;
+            if (cellsPerRow % 2 !== 0) { cellsPerRow = cellsPerRow - 1; }
+            let containerWidth = (cellsPerRow * cellWidth) + (cellWidth / 2);
+            $( ".container" ).width(containerWidth);
+            return cellsPerRow;
+        }
+
+        function flashCell($cell) {
+            $cell.css('opacity', 0.25);
+            setTimeout(function() {
+                $cell.css('opacity', 1);
+            }, 200);
+        }
+
+        function getRandomInt(max) {
+            return Math.floor(Math.random() * max);
+        }
+        function getRandomEnvironment() {
+            return cellClasses[getRandomInt(cellClasses.length)];
+        }
+        function getEnvironmentFromParent(parentEnvironment) {
+            console.log(parentEnvironment);
+            console.log(environmentRelations[parentEnvironment]);
+            return environmentRelations[parentEnvironment][getRandomInt(environmentRelations[parentEnvironment].length)];
+        }
+    });
+</script>
+</body>
+</html>
